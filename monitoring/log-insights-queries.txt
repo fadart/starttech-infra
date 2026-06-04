@@ -1,0 +1,29 @@
+# Recent backend errors
+fields @timestamp, @message
+| filter @message like /ERROR/
+| sort @timestamp desc
+| limit 50
+
+# Request count by status code
+fields @timestamp, @message
+| parse @message '"status":*,' as status
+| stats count() by status
+| sort count desc
+
+# Slow requests (over 1 second)
+fields @timestamp, @message
+| parse @message '"latency":*,' as latency
+| filter latency > 1000
+| sort latency desc
+| limit 20
+
+# Authentication failures
+fields @timestamp, @message
+| filter @message like /unauthorized/ or @message like /401/
+| sort @timestamp desc
+| limit 50
+
+# Application startup logs
+fields @timestamp, @message
+| filter @message like /starting/ or @message like /listening/
+| sort @timestamp asc

@@ -1,0 +1,36 @@
+{
+  "alarms": [
+    {
+      "name": "starttech-cpu-high",
+      "metric": "CPUUtilization",
+      "namespace": "AWS/EC2",
+      "threshold": 80,
+      "comparison": "GreaterThanThreshold",
+      "description": "Triggers scale up when CPU exceeds 80%"
+    },
+    {
+      "name": "starttech-cpu-low",
+      "metric": "CPUUtilization",
+      "namespace": "AWS/EC2",
+      "threshold": 20,
+      "comparison": "LessThanThreshold",
+      "description": "Triggers scale down when CPU drops below 20%"
+    },
+    {
+      "name": "starttech-alb-5xx",
+      "metric": "HTTPCode_Target_5XX_Count",
+      "namespace": "AWS/ApplicationELB",
+      "threshold": 10,
+      "comparison": "GreaterThanThreshold",
+      "description": "Triggers when backend returns too many 5xx errors"
+    },
+    {
+      "name": "starttech-alb-latency",
+      "metric": "TargetResponseTime",
+      "namespace": "AWS/ApplicationELB",
+      "threshold": 2,
+      "comparison": "GreaterThanThreshold",
+      "description": "Triggers when ALB response time exceeds 2 seconds"
+    }
+  ]
+}
