@@ -35,6 +35,7 @@ module "storage" {
 
   project_name = var.project_name
   environment  = var.environment
+  alb_dns_name = module.compute.alb_dns_name
 }
 
 module "compute" {

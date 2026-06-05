@@ -8,12 +8,14 @@
       "height": 6,
       "properties": {
         "metrics": [
-          ["AWS/EC2", "CPUUtilization"]
+          ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", "starttech-production-asg"]
         ],
         "period": 300,
         "stat": "Average",
         "region": "us-east-1",
-        "title": "EC2 CPU Utilisation"
+        "title": "EC2 CPU Utilisation",
+        "view": "timeSeries",
+        "stacked": false
       }
     },
     {
@@ -24,13 +26,46 @@
       "height": 6,
       "properties": {
         "metrics": [
-          ["AWS/ApplicationELB", "RequestCount"]
+          ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "app/starttech-production-alb/<alb-id>"]
         ],
         "period": 300,
         "stat": "Sum",
         "region": "us-east-1",
-        "title": "ALB Request Count"
+        "title": "ALB Request Count",
+        "view": "timeSeries",
+        "stacked": false
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/ElastiCache", "CurrConnections", "CacheClusterId", "starttech-production-redis"]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "us-east-1",
+        "title": "Redis Connections",
+        "view": "timeSeries",
+        "stacked": false
+      }
+    },
+    {
+      "type": "log",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/starttech/production/backend' | fields @timestamp, @message | sort @timestamp desc | limit 20",
+        "region": "us-east-1",
+        "title": "Recent backend logs",
+        "view": "table"
       }
     }
-
-    
+  ]
+}

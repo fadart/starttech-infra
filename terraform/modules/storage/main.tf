@@ -30,16 +30,134 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 
 # CloudFront distribution
 resource "aws_cloudfront_distribution" "frontend" {
+  # S3 origin for frontend static files
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "S3-${aws_s3_bucket.frontend.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 
+  # ALB origin for backend API
+  origin {
+    domain_name = var.alb_dns_name
+    origin_id   = "ALB-backend"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
 
+  # /auth/* → ALB
+  ordered_cache_behavior {
+    path_pattern     = "/auth/*"
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "ALB-backend"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["Origin", "Authorization", "Content-Type", "Accept", "Access-Control-Request-Headers", "Access-Control-Request-Method"]
+      cookies {
+        forward = "all"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+  }
+
+  # /tasks/* → ALB
+  ordered_cache_behavior {
+    path_pattern     = "/tasks/*"
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "ALB-backend"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["Origin", "Authorization", "Content-Type", "Accept", "Access-Control-Request-Headers", "Access-Control-Request-Method"]
+      cookies {
+        forward = "all"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+  }
+
+  # /users/* → ALB
+  ordered_cache_behavior {
+    path_pattern     = "/users/*"
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "ALB-backend"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["Origin", "Authorization", "Content-Type", "Accept", "Access-Control-Request-Headers", "Access-Control-Request-Method"]
+      cookies {
+        forward = "all"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+  }
+
+  # /health* → ALB
+  ordered_cache_behavior {
+    path_pattern     = "/health*"
+    allowed_methods  = ["GET", "HEAD"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "ALB-backend"
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+  }
+
+  # /swagger/* → ALB
+  ordered_cache_behavior {
+    path_pattern     = "/swagger/*"
+    allowed_methods  = ["GET", "HEAD"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "ALB-backend"
+
+    forwarded_values {
+      query_string = true
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+  }
+
+  # Default behavior → S3 (frontend static files)
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]

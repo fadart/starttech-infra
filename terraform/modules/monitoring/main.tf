@@ -36,6 +36,39 @@ locals {
   alb_arn_suffix = replace(var.alb_arn, "/^.*:loadbalancer\\//", "")
 }
 
+# SSM Parameter for CloudWatch agent configuration
+resource "aws_ssm_parameter" "cloudwatch_config" {
+  name  = "/${var.project_name}/${var.environment}/cloudwatch-config"
+  type  = "String"
+  value = jsonencode({
+    logs = {
+      logs_collected = {
+        files = {
+          collect_list = [
+            {
+              file_path       = "/var/log/messages"
+              log_group_name  = "/${var.project_name}/${var.environment}/application"
+              log_stream_name = "{instance_id}/messages"
+            },
+            {
+              file_path        = "/var/lib/docker/containers/**/*-json.log"
+              log_group_name   = "/${var.project_name}/${var.environment}/backend"
+              log_stream_name  = "{instance_id}"
+              timestamp_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+            }
+          ]
+        }
+      }
+    }
+  })
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-cloudwatch-config"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project_name}-${var.environment}-dashboard"

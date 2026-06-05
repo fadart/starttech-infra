@@ -164,16 +164,59 @@ resource "aws_launch_template" "backend" {
 
   user_data = base64encode(<<-USERDATA
     #!/bin/bash
+    set -e
+
+    # Install dependencies
     yum update -y
     yum install -y amazon-cloudwatch-agent docker
     systemctl start docker
     systemctl enable docker
     usermod -a -G docker ec2-user
 
+    # Fetch instance metadata
+    REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+    ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
+
     # Start CloudWatch agent
     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
       -a fetch-config -m ec2 -s \
-      -c ssm:${var.project_name}-${var.environment}-cloudwatch-config
+      -c ssm:/${var.project_name}/${var.environment}/cloudwatch-config
+
+    # Authenticate to ECR and pull latest backend image
+    aws ecr get-login-password --region $REGION | \
+      docker login --username AWS --password-stdin $ECR_REGISTRY
+
+    docker pull $ECR_REGISTRY/starttech-backend:latest
+
+    # Fetch secrets from SSM Parameter Store
+    MONGO_URI=$(aws ssm get-parameter \
+      --name "/${var.project_name}/${var.environment}/mongo-uri" \
+      --with-decryption --query Parameter.Value --output text --region $REGION)
+
+    JWT_SECRET=$(aws ssm get-parameter \
+      --name "/${var.project_name}/${var.environment}/jwt-secret" \
+      --with-decryption --query Parameter.Value --output text --region $REGION)
+
+    # Run backend container with CloudWatch log driver
+    docker run -d \
+      --name backend \
+      --restart always \
+      -p 8080:8080 \
+      --log-driver awslogs \
+      --log-opt awslogs-region=$REGION \
+      --log-opt awslogs-group=/${var.project_name}/${var.environment}/backend \
+      --log-opt awslogs-stream=$INSTANCE_ID \
+      -e PORT=8080 \
+      -e MONGO_URI="$MONGO_URI" \
+      -e JWT_SECRET_KEY="$JWT_SECRET" \
+      -e ENABLE_CACHE=true \
+      -e REDIS_ADDR="${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379" \
+      -e ALLOWED_ORIGINS="$(aws ssm get-parameter --name '/${var.project_name}/${var.environment}/allowed-origins' --query Parameter.Value --output text --region $REGION 2>/dev/null || echo '*')" \
+      -e LOG_LEVEL=INFO \
+      -e LOG_FORMAT=json \
+      $ECR_REGISTRY/starttech-backend:latest
   USERDATA
   )
 
