@@ -162,10 +162,55 @@ resource "aws_security_group" "alb" {
 # Security group - EC2 backend
 resource "aws_security_group" "backend" {
   name        = "${var.project_name}-${var.environment}-backend-sg"
-  description = "Security group for backend EC2
+  description = "Security group for backend EC2 instances"
+  vpc_id      = aws_vpc.main.id
 
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
 
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-backend-sg"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
 
+# Security group - Redis
+resource "aws_security_group" "redis" {
+  name        = "${var.project_name}-${var.environment}-redis-sg"
+  description = "Security group for ElastiCache Redis"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.backend.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-redis-sg"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
 
 
