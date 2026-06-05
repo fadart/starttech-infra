@@ -19,19 +19,6 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
   restrict_public_buckets = true
 }
 
-# Enable static website hosting
-resource "aws_s3_bucket_website_configuration" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-
-  index_document {
-    suffix = "index.html"
-  }
-
-  error_document {
-    key = "index.html"
-  }
-}
-
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "frontend" {
   name                              = "${var.project_name}-${var.environment}-oac"

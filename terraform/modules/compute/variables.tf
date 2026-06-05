@@ -57,3 +57,9 @@ variable "frontend_bucket" {
   description = "Frontend S3 bucket name"
   type        = string
 }
+
+variable "certificate_arn" {
+  description = "ACM certificate ARN for HTTPS listener (leave empty to skip HTTPS)"
+  type        = string
+  default     = ""
+}

@@ -66,7 +66,7 @@ resource "aws_iam_role_policy" "ec2" {
           "ssm:GetParameters",
           "ssm:GetParametersByPath"
         ]
-        Resource = "*"
+        Resource = "arn:aws:ssm:*:*:parameter/${var.project_name}/${var.environment}/*"
       }
     ]
   })
@@ -119,11 +119,26 @@ resource "aws_lb_target_group" "backend" {
   }
 }
 
-# ALB listener
+# ALB listener - HTTP
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend.arn
+  }
+}
+
+# ALB listener - HTTPS (only created when certificate_arn is provided)
+resource "aws_lb_listener" "https" {
+  count             = var.certificate_arn != "" ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.certificate_arn
 
   default_action {
     type             = "forward"
@@ -224,6 +239,53 @@ resource "aws_autoscaling_policy" "scale_down" {
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.backend.name
+}
+
+# CloudWatch alarms to trigger scaling policies
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "${var.project_name}-${var.environment}-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "Scale up when CPU exceeds 70%"
+  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.backend.name
+  }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-cpu-high"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${var.project_name}-${var.environment}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 30
+  alarm_description   = "Scale down when CPU drops below 30%"
+  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.backend.name
+  }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-cpu-low"
+    Environment = var.environment
+    Project     = var.project_name
+  }
 }
 
 # ElastiCache subnet group

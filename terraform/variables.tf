@@ -56,3 +56,9 @@ variable "key_name" {
   description = "EC2 key pair name"
   type        = string
 }
+
+variable "certificate_arn" {
+  description = "ACM certificate ARN for HTTPS ALB listener (leave empty to skip HTTPS)"
+  type        = string
+  default     = ""
+}

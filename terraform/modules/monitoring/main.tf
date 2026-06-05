@@ -32,6 +32,10 @@ resource "aws_cloudwatch_log_group" "application" {
   }
 }
 
+locals {
+  alb_arn_suffix = replace(var.alb_arn, "/^.*:loadbalancer\\//", "")
+}
+
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project_name}-${var.environment}-dashboard"
@@ -46,7 +50,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/EC2", "CPUUtilization"]
+            ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", var.asg_name]
           ]
           period  = 300
           stat    = "Average"
@@ -54,9 +58,6 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "EC2 CPU Utilisation"
           view    = "timeSeries"
           stacked = false
-          annotations = {
-            alarms = []
-          }
         }
       },
       {
@@ -67,7 +68,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/ApplicationELB", "RequestCount"]
+            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", local.alb_arn_suffix]
           ]
           period  = 300
           stat    = "Sum"
@@ -75,9 +76,6 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "ALB Request Count"
           view    = "timeSeries"
           stacked = false
-          annotations = {
-            alarms = []
-          }
         }
       },
       {
@@ -88,7 +86,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/ElastiCache", "CurrConnections"]
+            ["AWS/ElastiCache", "CurrConnections", "CacheClusterId", "${var.project_name}-${var.environment}-redis"]
           ]
           period  = 300
           stat    = "Average"
@@ -96,9 +94,6 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Redis Connections"
           view    = "timeSeries"
           stacked = false
-          annotations = {
-            alarms = []
-          }
         }
       },
       {
@@ -108,7 +103,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 12
         height = 6
         properties = {
-          query  = "SOURCE '/starttech/production/backend' | fields @timestamp, @message | sort @timestamp desc | limit 20"
+          query  = "SOURCE '/${var.project_name}/${var.environment}/backend' | fields @timestamp, @message | sort @timestamp desc | limit 20"
           region = "us-east-1"
           title  = "Recent backend logs"
           view   = "table"

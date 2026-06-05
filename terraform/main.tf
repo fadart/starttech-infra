@@ -52,6 +52,7 @@ module "compute" {
   instance_type             = var.instance_type
   key_name                  = var.key_name
   frontend_bucket           = module.storage.frontend_bucket_name
+  certificate_arn           = var.certificate_arn
 }
 
 module "monitoring" {
@@ -59,4 +60,6 @@ module "monitoring" {
 
   project_name = var.project_name
   environment  = var.environment
+  asg_name     = module.compute.asg_name
+  alb_arn      = module.compute.alb_arn
 }
