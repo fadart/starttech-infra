@@ -45,12 +45,18 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 12
         height = 6
         properties = {
-          title  = "EC2 CPU Utilization"
-          period = 300
-          stat   = "Average"
           metrics = [
             ["AWS/EC2", "CPUUtilization"]
           ]
+          period  = 300
+          stat    = "Average"
+          region  = "us-east-1"
+          title   = "EC2 CPU Utilisation"
+          view    = "timeSeries"
+          stacked = false
+          annotations = {
+            alarms = []
+          }
         }
       },
       {
@@ -60,12 +66,52 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 12
         height = 6
         properties = {
-          title  = "ALB Request Count"
-          period = 300
-          stat   = "Sum"
           metrics = [
             ["AWS/ApplicationELB", "RequestCount"]
           ]
+          period  = 300
+          stat    = "Sum"
+          region  = "us-east-1"
+          title   = "ALB Request Count"
+          view    = "timeSeries"
+          stacked = false
+          annotations = {
+            alarms = []
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/ElastiCache", "CurrConnections"]
+          ]
+          period  = 300
+          stat    = "Average"
+          region  = "us-east-1"
+          title   = "Redis Connections"
+          view    = "timeSeries"
+          stacked = false
+          annotations = {
+            alarms = []
+          }
+        }
+      },
+      {
+        type   = "log"
+        x      = 12
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          query  = "SOURCE '/starttech/production/backend' | fields @timestamp, @message | sort @timestamp desc | limit 20"
+          region = "us-east-1"
+          title  = "Recent backend logs"
+          view   = "table"
         }
       }
     ]
