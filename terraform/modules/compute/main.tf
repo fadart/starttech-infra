@@ -178,13 +178,13 @@ resource "aws_launch_template" "backend" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "backend" {
-  name                = "${var.project_name}-${var.environment}-asg"
-  desired_capacity    = 2
-  min_size            = 1
-  max_size            = 4
-  target_group_arns   = [aws_lb_target_group.backend.arn]
-  vpc_zone_identifier = var.private_subnet_ids
-  health_check_type   = "ELB"
+  name                      = "${var.project_name}-${var.environment}-asg"
+  desired_capacity          = 2
+  min_size                  = 1
+  max_size                  = 4
+  target_group_arns         = [aws_lb_target_group.backend.arn]
+  vpc_zone_identifier       = var.private_subnet_ids
+  health_check_type         = "ELB"
   health_check_grace_period = 120
 
   launch_template {
