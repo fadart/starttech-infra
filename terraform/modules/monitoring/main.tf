@@ -38,8 +38,8 @@ locals {
 
 # SSM Parameter for CloudWatch agent configuration
 resource "aws_ssm_parameter" "cloudwatch_config" {
-  name  = "/${var.project_name}/${var.environment}/cloudwatch-config"
-  type  = "String"
+  name = "/${var.project_name}/${var.environment}/cloudwatch-config"
+  type = "String"
   value = jsonencode({
     logs = {
       logs_collected = {
