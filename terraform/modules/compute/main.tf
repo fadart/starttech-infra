@@ -210,10 +210,14 @@ resource "aws_launch_template" "backend" {
       --log-opt awslogs-stream=$INSTANCE_ID \
       -e PORT=8080 \
       -e MONGO_URI="$MONGO_URI" \
+      -e DB_NAME=much_todo_db \
       -e JWT_SECRET_KEY="$JWT_SECRET" \
+      -e JWT_EXPIRATION_HOURS=72 \
       -e ENABLE_CACHE=true \
       -e REDIS_ADDR="${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379" \
       -e ALLOWED_ORIGINS="$(aws ssm get-parameter --name '/${var.project_name}/${var.environment}/allowed-origins' --query Parameter.Value --output text --region $REGION 2>/dev/null || echo '*')" \
+      -e COOKIE_DOMAINS="da2hzzlrvudt6.cloudfront.net" \
+      -e SECURE_COOKIE=false \
       -e LOG_LEVEL=INFO \
       -e LOG_FORMAT=json \
       $ECR_REGISTRY/starttech-backend:latest
