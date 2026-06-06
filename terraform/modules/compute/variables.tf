@@ -59,8 +59,9 @@ variable "frontend_bucket" {
 }
 
 variable "certificate_arn" {
-  description = "ACM certificate ARN for HTTPS listener (leave empty to skip HTTPS)"
+  description = "ACM certificate ARN for HTTPS listener (Leave empty to skip HTTPS)"
   type        = string
   default     = ""
 }
+
 
