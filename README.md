@@ -4,42 +4,7 @@ AWS infrastructure for the StartTech full-stack application, managed entirely wi
 
 ## Architecture
 
-```
-                        ┌─────────────────────────────────────┐
-                        │            us-east-1                │
-                        │                                     │
-         Users ───────► │  CloudFront (da2hzzlrvudt6)        │
-                        │     │              │                │
-                        │     │ /auth/*      │ default        │
-                        │     │ /tasks/*     │                │
-                        │     │ /users/*     │                │
-                        │     │ /health*     │                │
-                        │     ▼              ▼                │
-                        │   ALB           S3 Bucket           │
-                        │     │         (frontend)            │
-                        │     ▼                               │
-                        │  ┌──────────────────────┐          │
-                        │  │  VPC (10.0.0.0/16)   │          │
-                        │  │                      │          │
-                        │  │  Public Subnets       │          │
-                        │  │  10.0.1.0/24 (us-east-1a)      │
-                        │  │  10.0.2.0/24 (us-east-1b)      │
-                        │  │        │             │          │
-                        │  │     NAT GW        NAT GW        │
-                        │  │        │             │          │
-                        │  │  Private Subnets      │          │
-                        │  │  10.0.3.0/24 (us-east-1a)      │
-                        │  │  10.0.4.0/24 (us-east-1b)      │
-                        │  │        │                        │
-                        │  │   ASG (EC2 t3.micro)            │
-                        │  │   Docker: starttech-backend     │
-                        │  │        │                        │
-                        │  │   ElastiCache Redis             │
-                        │  └──────────────────────┘          │
-                        │                                     │
-                        │  CloudWatch Logs + Dashboard        │
-                        └─────────────────────────────────────┘
-```
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full system architecture documentation.
 
 ## Repository Structure
 
@@ -67,36 +32,9 @@ starttech-infra/
 └── ARCHITECTURE.md
 ```
 
-## Terraform Modules
+## Terraform Breakdown
+See [ARCHITECTURE.md](./ARCHITECTURE.md#terraform-breakdown) for the breakdown of Terraform Modules
 
-### Networking (`modules/networking`)
-- VPC with DNS support enabled
-- 2 public subnets and 2 private subnets across `us-east-1a` and `us-east-1b`
-- Internet Gateway for public subnets
-- NAT Gateways (one per AZ) for private subnet outbound traffic
-- Security groups for ALB (ports 80/443), EC2 backend (port 8080), and Redis (port 6379)
-
-### Compute (`modules/compute`)
-- **ALB** — Internet-facing Application Load Balancer with HTTP listener on port 80; optional HTTPS listener when `certificate_arn` is provided
-- **Target Group** — forwards to EC2 on port 8080 with `/health` health check
-- **Launch Template** — Amazon Linux 2, installs Docker and CloudWatch agent, pulls backend image from ECR, starts container with secrets from SSM Parameter Store
-- **Auto Scaling Group** — min 1, desired 2, max 4 instances; ELB health checks
-- **Scaling Policies** — scale up at 70% CPU, scale down at 30% CPU (triggered by CloudWatch alarms)
-- **ElastiCache Redis** — `cache.t3.micro`, Redis 7, single node
-- **IAM Role** — least-privilege access to CloudWatch Logs, ECR, and SSM parameters scoped to `/${project_name}/${environment}/*`
-
-### Storage (`modules/storage`)
-- **S3 Bucket** — private bucket for frontend static files; public access fully blocked
-- **CloudFront Distribution** — HTTPS-only, with two origins:
-  - S3 origin (default) — serves frontend static files
-  - ALB origin — serves API routes (`/auth/*`, `/tasks/*`, `/users/*`, `/health*`, `/swagger/*`) forwarded with cookies and auth headers; caching disabled
-- **OAC** — CloudFront Origin Access Control for secure S3 access
-
-### Monitoring (`modules/monitoring`)
-- **CloudWatch Log Groups** — `/starttech/production/backend`, `/starttech/production/frontend`, `/starttech/production/application` (30-day retention)
-- **SSM Parameter** — `/starttech/production/cloudwatch-config` stores the CloudWatch agent config for Docker log collection
-- **CloudWatch Dashboard** — EC2 CPU, ALB request count, Redis connections, backend log stream
-- **CloudWatch Alarms** — CPU high (>70%) triggers scale up; CPU low (<30%) triggers scale down
 
 ## CI/CD Pipeline
 
@@ -117,8 +55,8 @@ Push to main → Validate → Apply (deploys changes)
 
 | Secret | Description |
 |--------|-------------|
-| `AWS_ACCESS_KEY_ID` | AWS credentials for Terraform |
-| `AWS_SECRET_ACCESS_KEY` | AWS credentials for Terraform |
+| `AWS_ACCESS_KEY_ID` | AWS access key for Terraform |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret for Terraform |
 | `EC2_KEY_NAME` | EC2 key pair name for SSH access |
 
 ## Prerequisites
@@ -227,33 +165,11 @@ After a successful apply:
 | `/starttech/production/frontend` | Frontend access logs |
 | `/starttech/production/application` | EC2 system logs |
 
-### Useful Log Insights Queries
-
-```
-# Recent backend errors
-fields @timestamp, @message
-| filter @message like /ERROR/
-| sort @timestamp desc
-| limit 50
-
-# Authentication failures
-fields @timestamp, @message
-| filter @message like /unauthorized/ or @message like /401/
-| sort @timestamp desc
-| limit 50
-
-# Slow requests (over 1 second)
-fields @timestamp, @message
-| parse @message '"latency":*,' as latency
-| filter latency > 1000
-| sort latency desc
-| limit 20
-```
-
 ## Security
 
-- EC2 instances run in **private subnets** with no public IP
-- All secrets stored in **SSM Parameter Store** (SecureString), never in code
+- EC2 instances run in **private subnets** with no public IP - not directly accessible from the internet
+- ALB is the only public entry point for backend traffic
+- All secrets stored in **SSM Parameter Store**, never in code
 - IAM role uses **least-privilege** — SSM access scoped to project path only
 - S3 bucket has **all public access blocked**; served exclusively via CloudFront OAC
 - No `.tfstate` or `.tfvars` files committed to git

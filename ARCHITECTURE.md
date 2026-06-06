@@ -1,87 +1,110 @@
-# Architecture documentation
+# Architecture
+This document describes the system architecture for the StartTech application, 
+including infrastructure components, network topology, CI/CD pipeline flow and 
+security design. All infrastructure is provisioned with Terraform and deployed 
+on AWS.
 
-## System overview
+## Architecture Diagram
 
-StartTech is a full-stack to-do application deployed on AWS with a complete CI/CD pipeline managed through GitHub Actions and infrastructure provisioned with Terraform.
+```
+                        ┌─────────────────────┐
+         Users ───────► │     CloudFront       │
+                        └──────────┬──────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+         API routes │                             │ Frontend routes
+    (/auth, /tasks) │                             │ (everything else)
+                    ▼                             ▼
+           ┌─────────────┐               ┌─────────────┐
+           │     ALB     │               │  S3 Bucket  │
+           └──────┬──────┘               │  (React)    │
+                  │                      └─────────────┘
+     ┌────────────▼─────────────┐
+     │     Auto Scaling Group   │
+     │  ┌─────────┐ ┌─────────┐ │
+     │  │EC2 (AZ1)│ │EC2 (AZ2)│ │
+     │  │Go+Docker│ │Go+Docker│ │
+     │  └────┬────┘ └────┬────┘ │
+     └───────┼───────────┼──────┘
+             │           │
+     ┌───────▼───┐   ┌───▼────────────┐
+     │ElastiCache│   │  MongoDB Atlas  │
+     │  Redis    │   │  (Atlas Cloud)  │
+     └───────────┘   └────────────────┘
+```
 
-## Architecture diagram
-                      ┌─────────────────┐
-                      │   CloudFront    │
-                      │      CDN        │
-                      └────────┬────────┘
-                               │
-                      ┌────────▼────────┐
-                      │   S3 Bucket     │
-                      │ (React Frontend)│
-                      └─────────────────┘
-Users ──────────────────► Application Load Balancer
-│
-┌──────────────▼──────────────┐
-│      Auto Scaling Group      │
-│  ┌──────────┐ ┌──────────┐  │
-│  │ EC2 (AZ1)│ │ EC2 (AZ2)│  │
-│  │ Golang   │ │ Golang   │  │
-│  └────┬─────┘ └────┬─────┘  │
-└───────┼────────────┼─────────┘
-│            │
-┌────────────▼────────────▼────────┐
-│                                  │
-┌──────────▼──────────┐         ┌─────────────▼──────┐
-│   ElastiCache Redis │         │   MongoDB Atlas     │
-│   (Caching/Sessions)│         │   (Data persistence)│
-└─────────────────────┘         └────────────────────┘
-
-
-## Components
+## Terraform Breakdown
 
 ### Networking
-- **VPC**: Isolated network with CIDR `10.0.0.0/16`
-- **Public subnets**: Host ALB and NAT gateways across 2 availability zones
-- **Private subnets**: Host EC2 instances and ElastiCache across 2 availability zones
-- **Internet Gateway**: Provides internet access to public subnets
-- **NAT Gateways**: Allow private subnet instances to access the internet
-- **Security groups**: Least-privilege rules for ALB, EC2, and Redis
+- VPC: Across 2 availability zones`us-east-1a` and `us-east-1b` with public and private subnets
+- Public subnets: host the ALB and NAT Gateways
+- Private subnets: host EC2 instances and ElastiCache Redis
+- Internet Gateway: gives public subnets internet access
+- NAT Gateways: allow private instances to reach the internet (e.g. to pull Docker images from ECR)
+- Security groups: ALB accepts public traffic, EC2 only accepts traffic from ALB, Redis only accepts traffic from EC2
 
 ### Compute
-- **Auto Scaling Group**: Minimum 1, desired 2, maximum 4 EC2 instances
-- **Launch template**: Amazon Linux 2 with Docker and CloudWatch agent
-- **Application Load Balancer**: Distributes traffic across EC2 instances
-- **Target group**: Health checks on `/health` endpoint port 8080
-- **ElastiCache Redis**: Single node cache.t3.micro for caching and sessions
+- ALB distributes traffic to EC2 instances, health checks on /health
+- Auto Scaling Group runs 2 EC2 instances by default, scales between 1 and 4 based on CPU
+- Each EC2 instance runs the backend as a Docker container, pulled from ECR on startup
+- ElastiCache Redis handles caching and sessions
 
 ### Storage
-- **S3 bucket**: Hosts compiled React static files
-- **CloudFront**: CDN distribution with HTTPS redirect and SPA routing support
-- **Origin Access Control**: Restricts S3 access to CloudFront only
+- S3 bucket: stores compiled React frontend, fully private
+- CloudFront: serves both frontend (from S3) and API (proxied to ALB) over HTTPS from a single domain
+- Origin Access Control: ensures S3 is only accessible through CloudFront
 
 ### Monitoring
-- **CloudWatch log groups**: Separate log groups for backend, frontend and application logs
-- **CloudWatch alarms**: CPU high (>80%) and CPU low (<20%) for auto scaling
-- **CloudWatch dashboard**: Centralised view of EC2 CPU, ALB requests, Redis connections and backend logs
+- CloudWatch log groups: Collect backend and application logs
+- CloudWatch alarms: Trigger scale up above 70% CPU and scale down below 30% CPU
+- CloudWatch dashboard: shows EC2 CPU, ALB request, Redis connections and live backend logs
 
 ### IAM
-- **EC2 instance role**: Least-privilege access to CloudWatch, ECR and SSM
-- **Instance profile**: Attached to all EC2 instances in the ASG
+- EC2 instances have a least-privilege role scoped to CloudWatch Logs, ECR and SSM parameters
 
-## CI/CD pipeline
-Push to main (terraform/**)
-│
-▼
+## CI/CD Pipeline Flow
+
+### Infrastructure pipeline
+Triggered on push to `main` when files under `terraform/` change.
+
+```
+Push to main
+     │
+     ▼
 Validate job
-├── terraform init
-├── terraform validate
-└── terraform fmt check
-│
-▼
-Apply job (main branch only)
-├── terraform init
-└── terraform apply
+  ├── terraform init
+  ├── terraform validate
+  └── terraform fmt -check
+     │
+     ▼
+Apply job
+  ├── terraform init
+  └── terraform apply -auto-approve
+```
+
+On a pull request, only Validate and Plan run — no changes are applied.
+
+### Frontend pipeline
+Triggered on push to `feature/full-stack` when files under `much-to-do/Client/` change.
+
+```
+Install → Lint → Security audit → Build → Deploy to S3 → Invalidate CloudFront
+```
+
+### Backend pipeline
+Triggered on push to `feature/full-stack` when files under `much-to-do/Server/` change.
+
+```
+Tests → staticcheck → govulncheck → Docker build → Trivy scan → Push to ECR → ASG instance refresh → Smoke test
+```
 
 ## Security
 
-- EC2 instances run in private subnets — not directly accessible from the internet
+- EC2 instances run in private subnets with no public IP — not directly accessible from the internet
 - ALB is the only public entry point for backend traffic
-- S3 bucket is private — CloudFront uses OAC to access it
-- Redis is only accessible from backend security group
-- IAM roles follow least-privilege principle
-- Secrets managed via GitHub Actions secrets
+- S3 bucket is fully private — CloudFront uses OAC to access it
+- Redis is only accessible from the backend security group on port 6379
+- Secrets (MongoDB URI, JWT key) are stored in SSM Parameter Store, never in code
+- IAM roles follow least-privilege — EC2 can only access its own SSM parameters
+- Terraform state is stored remotely in S3, never committed to git
