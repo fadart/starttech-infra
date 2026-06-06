@@ -72,6 +72,12 @@ resource "aws_iam_role_policy" "ec2" {
   })
 }
 
+# SSM managed instance core policy attachment
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # IAM instance profile
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-${var.environment}-ec2-profile"
@@ -131,21 +137,6 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# ALB listener - HTTPS (only created when certificate_arn is provided)
-resource "aws_lb_listener" "https" {
-  count             = var.certificate_arn != "" ? 1 : 0
-  load_balancer_arn = aws_lb.main.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.certificate_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn
-  }
-}
-
 # Launch template
 resource "aws_launch_template" "backend" {
   name_prefix   = "${var.project_name}-${var.environment}-"
@@ -168,7 +159,9 @@ resource "aws_launch_template" "backend" {
 
     # Install dependencies
     yum update -y
-    yum install -y amazon-cloudwatch-agent docker
+    yum install -y amazon-ssm-agent amazon-cloudwatch-agent docker
+    systemctl start amazon-ssm-agent
+    systemctl enable amazon-ssm-agent
     systemctl start docker
     systemctl enable docker
     usermod -a -G docker ec2-user
@@ -182,7 +175,7 @@ resource "aws_launch_template" "backend" {
     # Start CloudWatch agent
     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
       -a fetch-config -m ec2 -s \
-      -c ssm:/${var.project_name}/${var.environment}/cloudwatch-config
+      -c ssm:/${var.project_name}/${var.environment}/cloudwatch-config || true
 
     # Authenticate to ECR and pull latest backend image
     aws ecr get-login-password --region $REGION | \
@@ -199,6 +192,21 @@ resource "aws_launch_template" "backend" {
       --name "/${var.project_name}/${var.environment}/jwt-secret" \
       --with-decryption --query Parameter.Value --output text --region $REGION)
 
+    # Create .env file for the backend
+    cat > /tmp/.env << ENVEOF
+PORT=8080
+MONGO_URI=$MONGO_URI
+DB_NAME=much_todo_db
+JWT_SECRET_KEY=$JWT_SECRET
+JWT_EXPIRATION_HOURS=72
+ENABLE_CACHE=false
+ALLOWED_ORIGINS=https://da2hzzlrvudt6.cloudfront.net
+COOKIE_DOMAINS=da2hzzlrvudt6.cloudfront.net
+SECURE_COOKIE=false
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+ENVEOF
+
     # Run backend container with CloudWatch log driver
     docker run -d \
       --name backend \
@@ -208,18 +216,7 @@ resource "aws_launch_template" "backend" {
       --log-opt awslogs-region=$REGION \
       --log-opt awslogs-group=/${var.project_name}/${var.environment}/backend \
       --log-opt awslogs-stream=$INSTANCE_ID \
-      -e PORT=8080 \
-      -e MONGO_URI="$MONGO_URI" \
-      -e DB_NAME=much_todo_db \
-      -e JWT_SECRET_KEY="$JWT_SECRET" \
-      -e JWT_EXPIRATION_HOURS=72 \
-      -e ENABLE_CACHE=true \
-      -e REDIS_ADDR="${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379" \
-      -e ALLOWED_ORIGINS="$(aws ssm get-parameter --name '/${var.project_name}/${var.environment}/allowed-origins' --query Parameter.Value --output text --region $REGION 2>/dev/null || echo '*')" \
-      -e COOKIE_DOMAINS="da2hzzlrvudt6.cloudfront.net" \
-      -e SECURE_COOKIE=false \
-      -e LOG_LEVEL=INFO \
-      -e LOG_FORMAT=json \
+      -v /tmp/.env:/app/.env \
       $ECR_REGISTRY/starttech-backend:latest
   USERDATA
   )
