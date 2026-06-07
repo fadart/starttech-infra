@@ -265,6 +265,7 @@ resource "aws_autoscaling_group" "backend" {
 
   lifecycle {
     create_before_destroy = true
+    ignore_changes        = [desired_capacity]
   }
 }
 
