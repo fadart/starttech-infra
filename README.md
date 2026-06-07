@@ -1,6 +1,12 @@
 # StartTech Infrastructure
 
-AWS infrastructure for the StartTech full-stack application, managed entirely with Terraform and deployed via a GitHub Actions CI/CD pipeline.
+Terraform-based AWS infrastructure with a fully automated CI/CD pipeline for StartTech full-stack application.
+What this infrastructure provisions:
+
+- React frontend — S3 + CloudFront
+- Golang backend — EC2 + ALB + Auto Scaling Group
+- Caching and sessions — ElastiCache Redis
+- Monitoring and logging — CloudWatch
 
 ## Architecture
 
@@ -33,7 +39,7 @@ starttech-infra/
 ```
 
 ## Terraform Breakdown
-See [ARCHITECTURE.md](./ARCHITECTURE.md#terraform-breakdown) for the breakdown of Terraform Modules
+See [ARCHITECTURE.md](./ARCHITECTURE.md#) for the breakdown of Terraform Modules
 
 
 ## CI/CD Pipeline
@@ -47,9 +53,9 @@ Push to main → Validate → Apply (deploys changes)
 
 | Job | Trigger | Steps |
 |-----|---------|-------|
-| Validate | PR + push | `terraform init` → `validate` → `fmt -check` |
-| Plan | PR only | `terraform init` → `plan` |
-| Apply | Push to main | `terraform init` → `apply -auto-approve` |
+| Validate | Push to main, PR to main, manual dispatch | `terraform init` → `validate` → `fmt -check` |
+| Plan | PR to main only | `terraform init` → `plan` |
+| Apply | Push to main only | `terraform init` → `apply -auto-approve` |
 
 ### Required GitHub Secrets
 
@@ -173,3 +179,7 @@ After a successful apply:
 - IAM role uses **least-privilege** — SSM access scoped to project path only
 - S3 bucket has **all public access blocked**; served exclusively via CloudFront OAC
 - No `.tfstate` or `.tfvars` files committed to git
+
+
+
+
