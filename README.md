@@ -1,6 +1,6 @@
 # StartTech Infrastructure
 
-Terraform-based AWS infrastructure with a fully automated CI/CD pipeline for StartTech full-stack application.
+Terraform-based AWS infrastructure for the StartTech full-stack application, deployed via a fully automated GitHub Actions CI/CD pipeline. Built for high availability and scalability across two availability zones, with a containerised Golang backend and React frontend.
 What this infrastructure provisions:
 
 - React frontend — S3 + CloudFront
@@ -180,6 +180,7 @@ After a successful apply:
 - S3 bucket has **all public access blocked**; served exclusively via CloudFront OAC
 - No `.tfstate` or `.tfvars` files committed to git
 
+## Operations and troubleshooting guide
 
-
+For deployment procedures, troubleshooting steps and monitoring guidance, see [RUNBOOK.md](./RUNBOOK.md).
 
