@@ -24,6 +24,48 @@ terraform destroy -var="key_name=starttech-key"
 
 ---
 
+## Testing and verification of infrastructure
+
+### Verify infrastructure is running
+```bash
+terraform output
+```
+
+### Test backend health
+```bash
+curl https://<cloudfront-domain>/health
+```
+Expected response: `{"cache":"disabled","database":"ok"}`
+
+### Test frontend
+Open `https://<cloudfront-domain>` in a browser. You should see the MuchToDo login page.
+
+### Verify EC2 instances are healthy
+```bash
+aws elbv2 describe-target-health \
+  --target-group-arn $(aws elbv2 describe-target-groups \
+    --names starttech-production-tg \
+    --query 'TargetGroups[0].TargetGroupArn' \
+    --output text) \
+  --query 'TargetHealthDescriptions[*].{ID:Target.Id,Health:TargetHealth.State}' \
+  --output table
+```
+
+### Verify CloudWatch logs are flowing
+```bash
+aws logs tail /starttech/production/backend --follow
+```
+
+### Verify ECR has latest image
+```bash
+aws ecr describe-images \
+  --repository-name starttech-backend \
+  --query 'imageDetails[*].{Tag:imageTags[0],Date:imagePushedAt}' \
+  --output table
+```
+
+---
+
 ## Common issues and how to fix them
 
 ### Backend returns 502

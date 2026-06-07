@@ -39,7 +39,7 @@ starttech-infra/
 ```
 
 ## Terraform Breakdown
-See [ARCHITECTURE.md](./ARCHITECTURE.md#) for the breakdown of Terraform Modules
+See [ARCHITECTURE.md](./ARCHITECTURE.md#terraform-breakdown) for the breakdown of Terraform Modules
 
 
 ## CI/CD Pipeline
