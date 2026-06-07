@@ -1,6 +1,7 @@
 # StartTech Infrastructure
 
 Terraform-based AWS infrastructure for the StartTech full-stack application, deployed via a fully automated GitHub Actions CI/CD pipeline. Built for high availability and scalability across two availability zones, with a containerised Golang backend and React frontend.
+
 What this infrastructure provisions:
 
 - React frontend — S3 + CloudFront
